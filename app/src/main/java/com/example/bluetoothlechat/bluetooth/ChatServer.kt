@@ -243,7 +243,8 @@ object ChatServer {
                 "onConnectionStateChange: Server $device ${device.name} success: $isSuccess connected: $isConnected"
             )
             if (isSuccess && isConnected) {
-                _connectionRequest.postValue(device)
+//                _connectionRequest.postValue(device)
+                _deviceConnection.postValue(DeviceConnectionState.Connected(device))
             } else {
                 _deviceConnection.postValue(DeviceConnectionState.Disconnected)
             }
@@ -299,6 +300,16 @@ object ChatServer {
                 val service = discoveredGatt.getService(SERVICE_UUID)
                 messageCharacteristic = service.getCharacteristic(MESSAGE_UUID)
             }
+        }
+
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            super.onCharacteristicChanged(gatt, characteristic, value)
+            Log.d(TAG, "onCharacteristicChanged characteristic: $characteristic")
+            // 客户端读取服务端的数据
         }
     }
 
