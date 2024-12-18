@@ -63,7 +63,7 @@ object ChatServer {
     private val _requestEnableBluetooth = MutableLiveData<Boolean>()
     val requestEnableBluetooth = _requestEnableBluetooth as LiveData<Boolean>
 
-    private var gattServer: BluetoothGattServer? = null
+//    private var gattServer: BluetoothGattServer? = null
     private var gattServerCallback: BluetoothGattServerCallback? = null
 
     private var gattClient: BluetoothGatt? = null
@@ -136,7 +136,11 @@ object ChatServer {
                 }
             }
         } else {
-            // todo zyl
+            messageCharacteristic = ChatServerVars.messageCharacteristic
+            val response = "CHAR_" + (Math.random() * 100).toInt() //模拟数据
+            messageCharacteristic?.setValue(response)
+            ChatServerVars.gattServer?.notifyCharacteristicChanged(ChatServerVars.device, messageCharacteristic, false)
+            Log.d(TAG, "通知客户端改变Characteristic[${messageCharacteristic?.uuid}]")
         }
         Log.d(TAG, "Send a message isAsClient: $isAsClient messageCharacteristic: $messageCharacteristic")
         return false
@@ -150,7 +154,7 @@ object ChatServer {
     private fun setupGattServer(app: Application) {
         gattServerCallback = GattServerCallback()
 
-        gattServer = bluetoothManager.openGattServer(
+        ChatServerVars.gattServer = bluetoothManager.openGattServer(
             app,
             gattServerCallback
         ).apply {
@@ -170,6 +174,7 @@ object ChatServer {
             BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_NOTIFY,
             BluetoothGattCharacteristic.PERMISSION_WRITE or BluetoothGattCharacteristic.PERMISSION_READ
         )
+        ChatServerVars.messageCharacteristic = messageCharacteristic
         service.addCharacteristic(messageCharacteristic)
         val confirmCharacteristic = BluetoothGattCharacteristic(
             CONFIRM_UUID,
@@ -261,6 +266,8 @@ object ChatServer {
             } else {
                 _deviceConnection.postValue(DeviceConnectionState.Disconnected)
             }
+            ChatServerVars.device = device
+            isAsClient = false
         }
 
         override fun onServiceAdded(status: Int, service: BluetoothGattService?) {
@@ -282,7 +289,7 @@ object ChatServer {
         ) {
             super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value)
             if (characteristic.uuid == MESSAGE_UUID) {
-                gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
+                ChatServerVars.gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
                 val message = value?.toString(Charsets.UTF_8)
                 Log.d(TAG, "onCharacteristicWriteRequest: Have message: \"$message\"")
                 message?.let {
@@ -333,6 +340,7 @@ object ChatServer {
             super.onCharacteristicChanged(gatt, characteristic, value)
             Log.d(TAG, "onCharacteristicChanged characteristic: $characteristic")
             // 客户端读取服务端的数据
+
         }
     }
 
