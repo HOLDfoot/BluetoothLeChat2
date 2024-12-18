@@ -138,8 +138,15 @@ object ChatServer {
         } else {
             messageCharacteristic = ChatServerVars.messageCharacteristic
             val response = "CHAR_" + (Math.random() * 100).toInt() //模拟数据
-            messageCharacteristic?.setValue(response)
-            ChatServerVars.gattServer?.notifyCharacteristicChanged(ChatServerVars.device, messageCharacteristic, false)
+            val messageBytes = message.toByteArray(Charsets.UTF_8)
+
+            messageCharacteristic?.value = messageBytes
+            ChatServerVars.gattServer?.let {
+                val success = it.notifyCharacteristicChanged(ChatServerVars.device, messageCharacteristic, false)
+                if (success) {
+                    _messages.value = Message.LocalMessage(message)
+                }
+            }
             Log.d(TAG, "通知客户端改变Characteristic[${messageCharacteristic?.uuid}]")
         }
         Log.d(TAG, "Send a message isAsClient: $isAsClient messageCharacteristic: $messageCharacteristic")
@@ -338,9 +345,12 @@ object ChatServer {
             value: ByteArray
         ) {
             super.onCharacteristicChanged(gatt, characteristic, value)
-            Log.d(TAG, "onCharacteristicChanged characteristic: $characteristic")
             // 客户端读取服务端的数据
-
+            val message: String = String(value) // 把服务端返回的数据转成字符串
+            Log.d(TAG, "onCharacteristicChanged message: $message")
+            message?.let {
+                _messages.postValue(RemoteMessage(it))
+            }
         }
     }
 
