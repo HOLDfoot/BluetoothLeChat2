@@ -114,7 +114,7 @@ object ChatServer {
         gattClient = device.connectGatt(app, false, gattClientCallback)
     }
 
-    private var isAsClient = true
+    private var isAsClient = false
 
     fun sendMessage(message: String): Boolean {
         var messageCharacteristic: BluetoothGattCharacteristic? = null
@@ -261,6 +261,7 @@ object ChatServer {
 
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             super.onConnectionStateChange(device, status, newState)
+            // 作为客户端的时候也会调用, 因为每个设备都允许"被连接"
             val isSuccess = status == BluetoothGatt.GATT_SUCCESS
             val isConnected = newState == BluetoothProfile.STATE_CONNECTED
             Log.d(
@@ -274,11 +275,11 @@ object ChatServer {
                 _deviceConnection.postValue(DeviceConnectionState.Disconnected)
             }
             ChatServerVars.device = device
-            isAsClient = false
         }
 
         override fun onServiceAdded(status: Int, service: BluetoothGattService?) {
             super.onServiceAdded(status, service)
+            // 作为客户端的时候也会调用, 因为每个设备都允许"被连接"
             Log.d(
                 TAG,
                 "onServiceAdded: Server $service ${service?.javaClass} status: $status"
@@ -295,6 +296,7 @@ object ChatServer {
             value: ByteArray?
         ) {
             super.onCharacteristicWriteRequest(device, requestId, characteristic, preparedWrite, responseNeeded, offset, value)
+            // 作为客户端的时候不会调用
             if (characteristic.uuid == MESSAGE_UUID) {
                 ChatServerVars.gattServer?.sendResponse(device, requestId, BluetoothGatt.GATT_SUCCESS, 0, null)
                 val message = value?.toString(Charsets.UTF_8)
@@ -316,6 +318,7 @@ object ChatServer {
             if (isSuccess && isConnected) {
                 // discover services
                 gatt.discoverServices()
+                isAsClient = true
             }
         }
 

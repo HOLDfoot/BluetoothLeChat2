@@ -15,6 +15,7 @@
  */
 package com.example.bluetoothlechat.scan
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.*
 import android.bluetooth.le.*
@@ -31,7 +32,7 @@ import com.example.bluetoothlechat.scan.DeviceScanViewState.*
 private const val TAG = "DeviceScanViewModel"
 // 30 second scan period
 private const val SCAN_PERIOD = 30000L
-
+@SuppressLint("MissingPermission")
 class DeviceScanViewModel(app: Application) : AndroidViewModel(app) {
 
     // LiveData for sending the view state to the DeviceScanFragment
@@ -66,7 +67,7 @@ class DeviceScanViewModel(app: Application) : AndroidViewModel(app) {
         stopScanning()
     }
 
-    fun startScan() {
+    private fun startScan() {
         // If advertisement is not supported on this device then other devices will not be able to
         // discover and connect to it.
         if (!adapter.isMultipleAdvertisementSupported) {
