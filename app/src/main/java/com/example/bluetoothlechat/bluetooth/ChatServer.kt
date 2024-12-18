@@ -15,6 +15,7 @@
  */
 package com.example.bluetoothlechat.bluetooth
 
+import android.annotation.SuppressLint
 import android.app.Application
 import android.bluetooth.*
 import android.bluetooth.le.AdvertiseCallback
@@ -29,8 +30,9 @@ import androidx.lifecycle.MutableLiveData
 import com.example.bluetoothlechat.bluetooth.Message.RemoteMessage
 import com.example.bluetoothlechat.chat.DeviceConnectionState
 
-private const val TAG = "ChatServer"
 
+private const val TAG = "ChatServer"
+@SuppressLint("MissingPermission")
 object ChatServer {
 
     // hold reference to app context to run the chat server
@@ -71,8 +73,8 @@ object ChatServer {
     private var currentDevice: BluetoothDevice? = null
     private val _deviceConnection = MutableLiveData<DeviceConnectionState>()
     val deviceConnection = _deviceConnection as LiveData<DeviceConnectionState>
-    private var gatt: BluetoothGatt? = null
-    private var messageCharacteristic: BluetoothGattCharacteristic? = null
+//    private var gatt: BluetoothGatt? = null
+//    private var messageCharacteristic: BluetoothGattCharacteristic? = null
 
     fun startServer(app: Application) {
         bluetoothManager = app.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager
@@ -112,23 +114,31 @@ object ChatServer {
         gattClient = device.connectGatt(app, false, gattClientCallback)
     }
 
-    fun sendMessage(message: String): Boolean {
-        Log.d(TAG, "Send a message")
-        messageCharacteristic?.let { characteristic ->
-            characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+    private var isAsClient = true
 
-            val messageBytes = message.toByteArray(Charsets.UTF_8)
-            characteristic.value = messageBytes
-            gatt?.let {
-                val success = it.writeCharacteristic(messageCharacteristic)
-                Log.d(TAG, "onServicesDiscovered: message send: $success")
-                if (success) {
-                    _messages.value = Message.LocalMessage(message)
+    fun sendMessage(message: String): Boolean {
+        var messageCharacteristic: BluetoothGattCharacteristic? = null
+        if (isAsClient) {
+            messageCharacteristic = ChatClient.messageCharacteristic
+            messageCharacteristic?.let { characteristic ->
+                characteristic.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+
+                val messageBytes = message.toByteArray(Charsets.UTF_8)
+                characteristic.value = messageBytes
+                ChatClient.gatt?.let {
+                    val success = it.writeCharacteristic(messageCharacteristic)
+                    Log.d(TAG, "onServicesDiscovered: message send: $success")
+                    if (success) {
+                        _messages.value = Message.LocalMessage(message)
+                    }
+                } ?: run {
+                    Log.d(TAG, "sendMessage: no gatt connection to send a message with")
                 }
-            } ?: run {
-                Log.d(TAG, "sendMessage: no gatt connection to send a message with")
             }
+        } else {
+            // todo zyl
         }
+        Log.d(TAG, "Send a message isAsClient: $isAsClient messageCharacteristic: $messageCharacteristic")
         return false
     }
 
@@ -157,8 +167,8 @@ object ChatServer {
         // need to ensure that the property is writable and has the write permission
         val messageCharacteristic = BluetoothGattCharacteristic(
             MESSAGE_UUID,
-            BluetoothGattCharacteristic.PROPERTY_WRITE,
-            BluetoothGattCharacteristic.PERMISSION_WRITE
+            BluetoothGattCharacteristic.PROPERTY_WRITE or BluetoothGattCharacteristic.PROPERTY_READ or BluetoothGattCharacteristic.PROPERTY_NOTIFY,
+            BluetoothGattCharacteristic.PERMISSION_WRITE or BluetoothGattCharacteristic.PERMISSION_READ
         )
         service.addCharacteristic(messageCharacteristic)
         val confirmCharacteristic = BluetoothGattCharacteristic(
@@ -230,10 +240,13 @@ object ChatServer {
             .build()
     }
 
+
+
     /**
      * Custom callback for the Gatt Server this device implements
      */
     private class GattServerCallback : BluetoothGattServerCallback() {
+
         override fun onConnectionStateChange(device: BluetoothDevice, status: Int, newState: Int) {
             super.onConnectionStateChange(device, status, newState)
             val isSuccess = status == BluetoothGatt.GATT_SUCCESS
@@ -296,9 +309,19 @@ object ChatServer {
             super.onServicesDiscovered(discoveredGatt, status)
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 Log.d(TAG, "onServicesDiscovered: Have gatt $discoveredGatt")
-                gatt = discoveredGatt
                 val service = discoveredGatt.getService(SERVICE_UUID)
-                messageCharacteristic = service.getCharacteristic(MESSAGE_UUID)
+                // 开启特征值通知
+                if (service == null) {
+                    Log.d(TAG, "onServicesDiscovered service is null")
+                    return
+                }
+                val chara1 = service.getCharacteristic(MESSAGE_UUID)
+                val b: Boolean = discoveredGatt.setCharacteristicNotification(chara1, true)
+                Log.d(TAG, "onServicesDiscovered 设置通知 $b")
+
+                ChatClient.gatt = discoveredGatt
+                ChatClient.messageCharacteristic = service.getCharacteristic(MESSAGE_UUID)
+                ChatClient.service = service
             }
         }
 
